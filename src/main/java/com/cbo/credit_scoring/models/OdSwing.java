@@ -1,5 +1,6 @@
 package com.cbo.credit_scoring.models;
 
+import com.cbo.credit_scoring.utils.YearMonthConverter;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -24,6 +25,7 @@ public class OdSwing {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "id")
     private Long id;
+    @Convert(converter = YearMonthConverter.class)  // Add this annotation
 
     @Column(name = "swing_month")
     private YearMonth month;

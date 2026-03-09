@@ -13,6 +13,8 @@ import java.time.YearMonth;
 @Getter
 public class MerchandiseTurnoverDTO {
     private Long id;
+    private String caseId; // will be added upon creation and will be used to uniquely identify the record and related table rows
+
     private YearMonth month;
     private BigDecimal debitDisbursements;
     private BigDecimal creditPrincipalRepayments;

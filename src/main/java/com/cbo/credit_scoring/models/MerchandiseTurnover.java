@@ -1,6 +1,7 @@
 package com.cbo.credit_scoring.models;
 
 
+import com.cbo.credit_scoring.utils.YearMonthConverter;
 import jakarta.persistence.*;
 import lombok.Data;
 import lombok.Getter;
@@ -21,7 +22,9 @@ public class MerchandiseTurnover {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "id")
     private Long id;
+    private String caseId; // will be added upon creation and will be used to uniquely identify the record and related table rows
 
+    @Convert(converter = YearMonthConverter.class)  // Add this annotation
     @Column(name = "turnover_month")
     private YearMonth month;  // Using YearMonth to store month and year
 

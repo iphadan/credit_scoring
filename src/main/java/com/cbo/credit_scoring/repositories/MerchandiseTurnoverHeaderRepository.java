@@ -13,6 +13,11 @@ import java.util.Optional;
 @Repository
 public interface MerchandiseTurnoverHeaderRepository extends JpaRepository<MerchandiseTurnoverHeader, Long> {
 
+    boolean existsByCaseId(String caseId);
+
+
+    Optional<MerchandiseTurnoverHeader> findByCaseId(String caseId);
+
     // Basic search methods
     List<MerchandiseTurnoverHeader> findByCustomerNameContainingIgnoreCase(String customerName);
 

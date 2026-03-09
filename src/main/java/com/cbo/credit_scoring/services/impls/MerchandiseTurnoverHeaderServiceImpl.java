@@ -4,8 +4,11 @@ package com.cbo.credit_scoring.services.impls;
 import com.cbo.credit_scoring.dtos.MerchandiseTurnoverHeaderDTO;
 import com.cbo.credit_scoring.dtos.MerchandiseTurnoverDTO;
 import com.cbo.credit_scoring.dtos.MerchandiseTurnoverDTO;
+import com.cbo.credit_scoring.exceptions.DuplicateResourceException;
+import com.cbo.credit_scoring.models.Case;
 import com.cbo.credit_scoring.models.MerchandiseTurnoverHeader;
 import com.cbo.credit_scoring.models.MerchandiseTurnover;
+import com.cbo.credit_scoring.repositories.CaseRepository;
 import com.cbo.credit_scoring.repositories.MerchandiseTurnoverHeaderRepository;
 import com.cbo.credit_scoring.repositories.MerchandiseTurnoverRepository;
 import com.cbo.credit_scoring.services.MerchandiseTurnoverHeaderService;
@@ -20,7 +23,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.YearMonth;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
@@ -31,24 +37,115 @@ public class MerchandiseTurnoverHeaderServiceImpl implements MerchandiseTurnover
 
     private final MerchandiseTurnoverHeaderRepository headerRepository;
     private final MerchandiseTurnoverRepository turnoverRepository;
+    private final CaseRepository caseRepository;
 
     @Override
+    @Transactional
     public MerchandiseTurnoverHeaderDTO createHeader(MerchandiseTurnoverHeaderDTO headerDTO) {
         log.info("Creating new merchandise turnover header for customer: {}", headerDTO.getCustomerName());
 
         // Validate required fields
         validateHeader(headerDTO);
 
-        // Convert DTO to Entity
+        // Check if caseId is provided
+        if (headerDTO.getCaseId() == null || headerDTO.getCaseId().trim().isEmpty()) {
+            throw new BadRequestException("Case ID must be provided");
+        }
+
+        // Check for duplicate caseId
+        if (headerRepository.existsByCaseId(headerDTO.getCaseId())) {
+            throw new DuplicateResourceException("Header with caseId " + headerDTO.getCaseId() + " already exists");
+        }
+
+        Case caseId =caseRepository.findByCaseId(headerDTO.getCaseId()).orElse(null);
+        if(caseId == null){
+
+            caseRepository.save(Case.builder()
+                            .caseId(headerDTO.getCaseId())
+                    .build());
+        }
+
+        // Check for duplicate account number
+        if (headerDTO.getAccountNumber() != null && !headerDTO.getAccountNumber().trim().isEmpty()) {
+            if (headerRepository.existsByAccountNumber(headerDTO.getAccountNumber())) {
+                throw new DuplicateResourceException("Header with account number " + headerDTO.getAccountNumber() + " already exists");
+            }
+        }
+
+        // Convert DTO to Entity (header only)
         MerchandiseTurnoverHeader header = mapToEntity(headerDTO);
 
-        // Save header
+        // ===== IMPORTANT: Handle Merchandise Turnover Records =====
+        if (headerDTO.getTurnoverRecords() != null && !headerDTO.getTurnoverRecords().isEmpty()) {
+            log.info("Processing {} merchandise turnover records", headerDTO.getTurnoverRecords().size());
+
+            // Validate all turnover records first
+            validateMerchandiseTurnoverRecords(headerDTO.getTurnoverRecords());
+
+            // Check for duplicate months within the request
+            checkForDuplicateMerchandiseMonths(headerDTO.getTurnoverRecords());
+
+            // Create and add each turnover record to the header
+            for (MerchandiseTurnoverHeaderDTO.MerchandiseTurnoverDTO turnoverDTO : headerDTO.getTurnoverRecords()) {
+
+                // Check if month already exists in database for this header
+                // Note: header doesn't have ID yet, so this check will be done at save time
+                // But we can check within the current request
+
+                // Create turnover entity
+                MerchandiseTurnover turnover = new MerchandiseTurnover();
+                turnover.setMonth(turnoverDTO.getMonth());
+                turnover.setCaseId(headerDTO.getCaseId());
+                turnover.setDebitDisbursements(turnoverDTO.getDebitDisbursements() != null ?
+                        turnoverDTO.getDebitDisbursements() : BigDecimal.ZERO);
+                turnover.setCreditPrincipalRepayments(turnoverDTO.getCreditPrincipalRepayments() != null ?
+                        turnoverDTO.getCreditPrincipalRepayments() : BigDecimal.ZERO);
+
+                // Use the helper method to establish bidirectional relationship
+                header.addTurnoverRecord(turnover);
+
+                log.debug("Added merchandise turnover record for month: {}", turnoverDTO.getMonth());
+            }
+        }
+
+        // Save header - THIS WILL ALSO SAVE ALL TURNOVER RECORDS due to CascadeType.ALL
         MerchandiseTurnoverHeader savedHeader = headerRepository.save(header);
-        log.info("Header created successfully with ID: {}", savedHeader.getId());
+        log.info("Merchandise header created successfully with ID: {}, CaseId: {}, with {} turnover records",
+                savedHeader.getId(), savedHeader.getCaseId(),
+                savedHeader.getTurnoverRecords() != null ? savedHeader.getTurnoverRecords().size() : 0);
 
         return mapToDTO(savedHeader);
     }
 
+
+    /**
+     * Validate merchandise turnover records
+     */
+    private void validateMerchandiseTurnoverRecords(List<MerchandiseTurnoverHeaderDTO.MerchandiseTurnoverDTO> turnoverRecords) {
+        for (MerchandiseTurnoverHeaderDTO.MerchandiseTurnoverDTO dto : turnoverRecords) {
+            if (dto.getMonth() == null) {
+                throw new BadRequestException("Month is required for each turnover record");
+            }
+            if (dto.getDebitDisbursements() != null && dto.getDebitDisbursements().compareTo(BigDecimal.ZERO) < 0) {
+                throw new BadRequestException("Debit disbursements cannot be negative for month: " + dto.getMonth());
+            }
+            if (dto.getCreditPrincipalRepayments() != null && dto.getCreditPrincipalRepayments().compareTo(BigDecimal.ZERO) < 0) {
+                throw new BadRequestException("Credit principal repayments cannot be negative for month: " + dto.getMonth());
+            }
+        }
+    }
+
+    /**
+     * Check for duplicate months within the same request
+     */
+    private void checkForDuplicateMerchandiseMonths(List<MerchandiseTurnoverHeaderDTO.MerchandiseTurnoverDTO> turnoverRecords) {
+        Set<YearMonth> months = new HashSet<>();
+        for (MerchandiseTurnoverHeaderDTO.MerchandiseTurnoverDTO dto : turnoverRecords) {
+            if (!months.add(dto.getMonth())) {
+                throw new BadRequestException("Duplicate month " + dto.getMonth() + " found in request");
+            }
+        }
+    }
     @Override
     public MerchandiseTurnoverHeaderDTO updateHeader(Long id, MerchandiseTurnoverHeaderDTO headerDTO) {
         log.info("Updating merchandise turnover header with ID: {}", id);
@@ -233,6 +330,7 @@ public class MerchandiseTurnoverHeaderServiceImpl implements MerchandiseTurnover
         header.setApprovedAmount(dto.getApprovedAmount());
         header.setDateApproved(dto.getDateApproved());
         header.setReportingDate(dto.getReportingDate());
+        header.setCaseId(dto.getCaseId());
         return header;
     }
 

@@ -1,4 +1,4 @@
-package com.cbo.credit_scoring.services.impl;
+package com.cbo.credit_scoring.services.impls;
 
 import com.cbo.credit_scoring.dtos.OdSwingHeaderDTO;
 import com.cbo.credit_scoring.dtos.OdSwingDTO;
@@ -34,17 +34,17 @@ public class OdSwingHeaderServiceImpl implements OdSwingHeaderService {
     private final OdSwingHeaderRepository headerRepository;
     private final OdSwingRepository swingRepository;
     private static final BigDecimal DEFAULT_THRESHOLD = new BigDecimal("80");
-
     @Override
+    @Transactional
     public OdSwingHeaderDTO createHeader(OdSwingHeaderDTO headerDTO) {
         log.info("Creating new OD swing header for account holder: {}", headerDTO.getAccountHolder());
 
         // Validate required fields
         validateHeader(headerDTO);
 
-        // Generate caseId if not provided
+        // Check if caseId is provided (must come from frontend)
         if (headerDTO.getCaseId() == null || headerDTO.getCaseId().trim().isEmpty()) {
-            headerDTO.setCaseId(generateCaseId(headerDTO));
+            throw new BadRequestException("Case ID must be provided");
         }
 
         // Check for duplicate caseId
@@ -64,16 +64,112 @@ public class OdSwingHeaderServiceImpl implements OdSwingHeaderService {
             headerDTO.setStatus("ACTIVE");
         }
 
-        // Convert DTO to Entity
+        // Convert DTO to Entity (header only)
         OdSwingHeader header = mapToEntity(headerDTO);
 
-        // Save header
+        // ===== IMPORTANT: Handle OD Swing Records =====
+        if (headerDTO.getSwingRecords() != null && !headerDTO.getSwingRecords().isEmpty()) {
+            log.info("Processing {} OD swing records", headerDTO.getSwingRecords().size());
+
+            // Validate all swing records first
+            validateSwingRecords(headerDTO.getSwingRecords());
+
+            // Check for duplicate months within the request
+            checkForDuplicateSwingMonths(headerDTO.getSwingRecords());
+
+            // Create and add each swing record to the header
+            for (OdSwingHeaderDTO.OdSwingDTO swingDTO : headerDTO.getSwingRecords()) {
+
+                // Validate date logic for high and low dates
+                if (swingDTO.getDateHigh() != null && swingDTO.getDateLow() != null) {
+                    if (swingDTO.getDateHigh().isBefore(swingDTO.getDateLow())) {
+                        throw new BadRequestException(
+                                "Date high cannot be before date low for month: " + swingDTO.getMonth());
+                    }
+                }
+
+                // Validate utilization percentage range
+                if (swingDTO.getUtilizationPercentage() != null) {
+                    if (swingDTO.getUtilizationPercentage().compareTo(BigDecimal.ZERO) < 0 ||
+                            swingDTO.getUtilizationPercentage().compareTo(new BigDecimal("100")) > 0) {
+                        throw new BadRequestException(
+                                "Utilization percentage must be between 0 and 100 for month: " + swingDTO.getMonth());
+                    }
+                }
+
+                // Create swing entity
+                OdSwing swing = new OdSwing();
+                swing.setMonth(swingDTO.getMonth());
+                swing.setHighestUtilization(swingDTO.getHighestUtilization());
+                swing.setDateHigh(swingDTO.getDateHigh());
+                swing.setLowestUtilization(swingDTO.getLowestUtilization());
+                swing.setDateLow(swingDTO.getDateLow());
+                swing.setUtilizationPercentage(swingDTO.getUtilizationPercentage());
+
+                // Use the helper method to establish bidirectional relationship
+                header.addSwingRecord(swing);
+
+                log.debug("Added OD swing record for month: {}", swingDTO.getMonth());
+            }
+        }
+
+        // Save header - THIS WILL ALSO SAVE ALL SWING RECORDS due to CascadeType.ALL
         OdSwingHeader savedHeader = headerRepository.save(header);
-        log.info("OD swing header created successfully with ID: {}, CaseId: {}", savedHeader.getId(), savedHeader.getCaseId());
+        log.info("OD swing header created successfully with ID: {}, CaseId: {}, with {} swing records",
+                savedHeader.getId(), savedHeader.getCaseId(),
+                savedHeader.getSwingRecords() != null ? savedHeader.getSwingRecords().size() : 0);
 
         return mapToDTO(savedHeader);
     }
+    /**
+     * Validate swing records
+     */
+    private void validateSwingRecords(List<OdSwingHeaderDTO.OdSwingDTO> swingRecords) {
+        for (OdSwingHeaderDTO.OdSwingDTO dto : swingRecords) {
+            if (dto.getMonth() == null) {
+                throw new BadRequestException("Month is required for each swing record");
+            }
 
+            // Validate highest utilization
+            if (dto.getHighestUtilization() != null && dto.getHighestUtilization().compareTo(BigDecimal.ZERO) < 0) {
+                throw new BadRequestException("Highest utilization cannot be negative for month: " + dto.getMonth());
+            }
+
+            // Validate lowest utilization
+            if (dto.getLowestUtilization() != null && dto.getLowestUtilization().compareTo(BigDecimal.ZERO) < 0) {
+                throw new BadRequestException("Lowest utilization cannot be negative for month: " + dto.getMonth());
+            }
+
+            // Validate that highest is greater than lowest
+            if (dto.getHighestUtilization() != null && dto.getLowestUtilization() != null) {
+                if (dto.getHighestUtilization().compareTo(dto.getLowestUtilization()) < 0) {
+                    throw new BadRequestException(
+                            "Highest utilization must be greater than lowest utilization for month: " + dto.getMonth());
+                }
+            }
+
+            // Validate dates are not in future if provided
+            LocalDate today = LocalDate.now();
+            if (dto.getDateHigh() != null && dto.getDateHigh().isAfter(today)) {
+                throw new BadRequestException("Date high cannot be in the future for month: " + dto.getMonth());
+            }
+            if (dto.getDateLow() != null && dto.getDateLow().isAfter(today)) {
+                throw new BadRequestException("Date low cannot be in the future for month: " + dto.getMonth());
+            }
+        }
+    }
+
+    /**
+     * Check for duplicate months within the same request
+     */
+    private void checkForDuplicateSwingMonths(List<OdSwingHeaderDTO.OdSwingDTO> swingRecords) {
+        Set<YearMonth> months = new HashSet<>();
+        for (OdSwingHeaderDTO.OdSwingDTO dto : swingRecords) {
+            if (!months.add(dto.getMonth())) {
+                throw new BadRequestException("Duplicate month " + dto.getMonth() + " found in request");
+            }
+        }
+    }
     @Override
     public OdSwingHeaderDTO updateHeader(Long id, OdSwingHeaderDTO headerDTO) {
         log.info("Updating OD swing header with ID: {}", id);

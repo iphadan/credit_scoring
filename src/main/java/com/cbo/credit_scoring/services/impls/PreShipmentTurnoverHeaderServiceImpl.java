@@ -2,6 +2,7 @@ package com.cbo.credit_scoring.services.impls;
 
 import com.cbo.credit_scoring.dtos.PreShipmentTurnoverHeaderDTO;
 import com.cbo.credit_scoring.dtos.PreShipmentTurnoverDTO;
+import com.cbo.credit_scoring.models.OdTurnoverHeader;
 import com.cbo.credit_scoring.models.PreShipmentTurnoverHeader;
 import com.cbo.credit_scoring.models.PreShipmentTurnover;
 import com.cbo.credit_scoring.repositories.PreShipmentTurnoverHeaderRepository;
@@ -20,6 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.YearMonth;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -33,6 +35,7 @@ public class PreShipmentTurnoverHeaderServiceImpl implements PreShipmentTurnover
     private final PreShipmentTurnoverRepository turnoverRepository;
 
     @Override
+    @Transactional
     public PreShipmentTurnoverHeaderDTO createHeader(PreShipmentTurnoverHeaderDTO headerDTO) {
         log.info("Creating new pre-shipment turnover header for customer: {}", headerDTO.getCustomerName());
 
@@ -41,7 +44,7 @@ public class PreShipmentTurnoverHeaderServiceImpl implements PreShipmentTurnover
 
         // Generate caseId if not provided
         if (headerDTO.getCaseId() == null || headerDTO.getCaseId().trim().isEmpty()) {
-            headerDTO.setCaseId(generateCaseId(headerDTO));
+            headerDTO.setCaseId(generateCaseId());
         }
 
         // Check for duplicate caseId
@@ -56,14 +59,76 @@ public class PreShipmentTurnoverHeaderServiceImpl implements PreShipmentTurnover
             }
         }
 
-        // Convert DTO to Entity
+        // Convert DTO to Entity (header only)
         PreShipmentTurnoverHeader header = mapToEntity(headerDTO);
 
-        // Save header
+        // ===== IMPORTANT: Handle PreShipmentTurnover Records =====
+        if (headerDTO.getTurnoverRecords() != null && !headerDTO.getTurnoverRecords().isEmpty()) {
+            log.info("Processing {} pre-shipment turnover records", headerDTO.getTurnoverRecords().size());
+
+            // Validate all turnover records first
+            validateTurnoverRecords(headerDTO.getTurnoverRecords());
+
+            // Check for duplicate months within the request
+            checkForDuplicateMonths(headerDTO.getTurnoverRecords());
+
+            // Create and add each turnover record to the header
+            for (PreShipmentTurnoverHeaderDTO.PreShipmentTurnoverDTO turnoverDTO : headerDTO.getTurnoverRecords()) {
+
+                // Create turnover entity
+                PreShipmentTurnover turnover = new PreShipmentTurnover();
+                turnover.setMonth(turnoverDTO.getMonth());
+//                turnover.setLcNumber(turnoverDTO.getLcNumber());
+//                turnover.setInvoiceNumber(turnoverDTO.getInvoiceNumber());
+//                turnover.setContractNumber(turnoverDTO.getContractNumber());
+                turnover.setDebitDisbursements(turnoverDTO.getDebitDisbursements() != null ?
+                        turnoverDTO.getDebitDisbursements() : BigDecimal.ZERO);
+                turnover.setCreditPrincipalRepayments(turnoverDTO.getCreditPrincipalRepayments() != null ?
+                        turnoverDTO.getCreditPrincipalRepayments() : BigDecimal.ZERO);
+
+                // Use the helper method to establish bidirectional relationship
+                    header.addTurnoverRecord(turnover);
+
+                log.debug("Added turnover record for month: {}", turnoverDTO.getMonth());
+            }
+        }
+
+        // Save header - THIS WILL ALSO SAVE ALL TURNOVER RECORDS due to CascadeType.ALL
         PreShipmentTurnoverHeader savedHeader = headerRepository.save(header);
-        log.info("Header created successfully with ID: {}, CaseId: {}", savedHeader.getId(), savedHeader.getCaseId());
+        log.info("Header created successfully with ID: {}, CaseId: {}, with {} turnover records",
+                savedHeader.getId(), savedHeader.getCaseId(),
+                savedHeader.getTurnoverRecords() != null ? savedHeader.getTurnoverRecords().size() : 0);
 
         return mapToDTO(savedHeader);
+    }
+
+    /**
+     * Validate all turnover records
+     */
+    private void validateTurnoverRecords(List<PreShipmentTurnoverHeaderDTO.PreShipmentTurnoverDTO> turnoverRecords) {
+        for (PreShipmentTurnoverHeaderDTO.PreShipmentTurnoverDTO dto : turnoverRecords) {
+            if (dto.getMonth() == null) {
+                throw new BadRequestException("Month is required for each turnover record");
+            }
+            if (dto.getDebitDisbursements() != null && dto.getDebitDisbursements().compareTo(BigDecimal.ZERO) < 0) {
+                throw new BadRequestException("Debit disbursements cannot be negative for month: " + dto.getMonth());
+            }
+            if (dto.getCreditPrincipalRepayments() != null && dto.getCreditPrincipalRepayments().compareTo(BigDecimal.ZERO) < 0) {
+                throw new BadRequestException("Credit principal repayments cannot be negative for month: " + dto.getMonth());
+            }
+        }
+    }
+
+    /**
+     * Check for duplicate months within the same request
+     */
+    private void checkForDuplicateMonths(List<PreShipmentTurnoverHeaderDTO.PreShipmentTurnoverDTO> turnoverRecords) {
+        Set<YearMonth> months = new HashSet<>();
+        for (PreShipmentTurnoverHeaderDTO.PreShipmentTurnoverDTO dto : turnoverRecords) {
+            if (!months.add(dto.getMonth())) {
+                throw new BadRequestException("Duplicate month " + dto.getMonth() + " found in request");
+            }
+        }
     }
 
     @Override
@@ -379,6 +444,7 @@ public class PreShipmentTurnoverHeaderServiceImpl implements PreShipmentTurnover
     }
 
     private PreShipmentTurnoverHeaderDTO mapToDTO(PreShipmentTurnoverHeader header) {
+        System.out.println(header);
         PreShipmentTurnoverHeaderDTO dto = PreShipmentTurnoverHeaderDTO.builder()
                 .id(header.getId())
                 .caseId(header.getCaseId())
@@ -389,6 +455,7 @@ public class PreShipmentTurnoverHeaderServiceImpl implements PreShipmentTurnover
                 .approvedAmount(header.getApprovedAmount())
                 .dateApproved(header.getDateApproved())
                 .reportingDate(header.getReportingDate())
+                .caseId(header.getCaseId())
                 .build();
 
         // Map turnover records if they exist
@@ -442,14 +509,16 @@ public class PreShipmentTurnoverHeaderServiceImpl implements PreShipmentTurnover
         }
     }
 
-    private String generateCaseId(PreShipmentTurnoverHeaderDTO dto) {
-        // Generate a unique case ID based on customer name and timestamp
-        String prefix = dto.getCustomerName().replaceAll("[^a-zA-Z0-9]", "").toUpperCase();
-        if (prefix.length() > 5) {
-            prefix = prefix.substring(0, 5);
-        }
-        String timestamp = String.valueOf(System.currentTimeMillis()).substring(7);
-        return prefix + "-" + timestamp;
+    private String generateCaseId() {
+        // Get current timestamp in milliseconds
+        long milliseconds = System.currentTimeMillis();
+
+        // Get current date in YYMMDD format
+        LocalDate today = LocalDate.now();
+        String datePart = today.format(DateTimeFormatter.ofPattern("yyMMdd"));
+
+        // Add header ID at the end for extra uniqueness (optional)
+        return String.format("cbocrs%d/%s", milliseconds, datePart);
     }
 
     private BigDecimal calculateUtilizationPercentage(BigDecimal netTurnover, BigDecimal approvedAmount) {

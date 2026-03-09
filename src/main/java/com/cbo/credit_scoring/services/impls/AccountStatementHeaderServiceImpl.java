@@ -36,15 +36,16 @@ public class AccountStatementHeaderServiceImpl implements AccountStatementHeader
     private static final BigDecimal DEFAULT_THRESHOLD = new BigDecimal("80");
 
     @Override
+    @Transactional
     public AccountStatementHeaderDTO createHeader(AccountStatementHeaderDTO headerDTO) {
         log.info("Creating new account statement header for account holder: {}", headerDTO.getAccountHolder());
 
         // Validate required fields
         validateHeader(headerDTO);
 
-        // Generate caseId if not provided
+        // Check if caseId is provided (must come from frontend)
         if (headerDTO.getCaseId() == null || headerDTO.getCaseId().trim().isEmpty()) {
-            headerDTO.setCaseId(generateCaseId(headerDTO));
+            throw new BadRequestException("Case ID must be provided");
         }
 
         // Check for duplicate caseId
@@ -64,16 +65,123 @@ public class AccountStatementHeaderServiceImpl implements AccountStatementHeader
             headerDTO.setStatus("ACTIVE");
         }
 
-        // Convert DTO to Entity
+        // Convert DTO to Entity (header only)
         AccountStatementHeader header = mapToEntity(headerDTO);
 
-        // Save header
+        // ===== IMPORTANT: Handle Account Statement Records =====
+        if (headerDTO.getStatementRecords() != null && !headerDTO.getStatementRecords().isEmpty()) {
+            log.info("Processing {} account statement records", headerDTO.getStatementRecords().size());
+
+            // Validate all statement records first
+            validateStatementRecords(headerDTO.getStatementRecords());
+
+            // Check for duplicate months within the request
+            checkForDuplicateStatementMonths(headerDTO.getStatementRecords());
+
+            // Create and add each statement record to the header
+            for (AccountStatementHeaderDTO.AccountStatementDTO statementDTO : headerDTO.getStatementRecords()) {
+
+                // Validate monthly data consistency
+                validateStatementRecordData(statementDTO);
+
+                // Create statement entity
+                AccountStatement statement = new AccountStatement();
+                statement.setMonth(statementDTO.getMonth());
+                statement.setTotalTurnoverCredit(statementDTO.getTotalTurnoverCredit() != null ?
+                        statementDTO.getTotalTurnoverCredit() : BigDecimal.ZERO);
+                statement.setTotalTurnoverDebit(statementDTO.getTotalTurnoverDebit() != null ?
+                        statementDTO.getTotalTurnoverDebit() : BigDecimal.ZERO);
+                statement.setNumberOfCreditEntries(statementDTO.getNumberOfCreditEntries() != null ?
+                        statementDTO.getNumberOfCreditEntries() : 0);
+                statement.setUtilizationPercentage(statementDTO.getUtilizationPercentage() != null ?
+                        statementDTO.getUtilizationPercentage(): BigDecimal.ZERO);
+
+                // monthlyCreditAverage and utilizationPercentage will be calculated
+                // automatically by @PrePersist and @PreUpdate methods in AccountStatement entity
+
+                // Use the helper method to establish bidirectional relationship
+                header.addStatementRecord(statement);
+
+                log.debug("Added account statement record for month: {}", statementDTO.getMonth());
+            }
+        }
+
+        // Save header - THIS WILL ALSO SAVE ALL STATEMENT RECORDS due to CascadeType.ALL
         AccountStatementHeader savedHeader = headerRepository.save(header);
-        log.info("Account statement header created successfully with ID: {}, CaseId: {}", savedHeader.getId(), savedHeader.getCaseId());
+        log.info("Account statement header created successfully with ID: {}, CaseId: {}, with {} statement records",
+                savedHeader.getId(), savedHeader.getCaseId(),
+                savedHeader.getStatementRecords() != null ? savedHeader.getStatementRecords().size() : 0);
 
         return mapToDTO(savedHeader);
     }
+    /**
+     * Validate statement records
+     */
+    private void validateStatementRecords(List<AccountStatementHeaderDTO.AccountStatementDTO> statementRecords) {
+        for (AccountStatementHeaderDTO.AccountStatementDTO dto : statementRecords) {
+            if (dto.getMonth() == null) {
+                throw new BadRequestException("Month is required for each statement record");
+            }
 
+            // Validate total turnover credit
+            if (dto.getTotalTurnoverCredit() != null && dto.getTotalTurnoverCredit().compareTo(BigDecimal.ZERO) < 0) {
+                throw new BadRequestException("Total turnover credit cannot be negative for month: " + dto.getMonth());
+            }
+
+            // Validate total turnover debit
+            if (dto.getTotalTurnoverDebit() != null && dto.getTotalTurnoverDebit().compareTo(BigDecimal.ZERO) < 0) {
+                throw new BadRequestException("Total turnover debit cannot be negative for month: " + dto.getMonth());
+            }
+
+            // Validate number of credit entries
+            if (dto.getNumberOfCreditEntries() != null && dto.getNumberOfCreditEntries() < 0) {
+                throw new BadRequestException("Number of credit entries cannot be negative for month: " + dto.getMonth());
+            }
+        }
+    }
+
+    /**
+     * Validate individual statement record data consistency
+     */
+    private void validateStatementRecordData(AccountStatementHeaderDTO.AccountStatementDTO dto) {
+        // If monthly credit average is provided, validate it roughly matches calculation
+        if (dto.getMonthlyCreditAverage() != null &&
+                dto.getTotalTurnoverCredit() != null &&
+                dto.getNumberOfCreditEntries() != null &&
+                dto.getNumberOfCreditEntries() > 0) {
+
+            BigDecimal calculatedAvg = dto.getTotalTurnoverCredit()
+                    .divide(BigDecimal.valueOf(dto.getNumberOfCreditEntries()), 2, RoundingMode.HALF_UP);
+
+            BigDecimal difference = dto.getMonthlyCreditAverage().subtract(calculatedAvg).abs();
+            if (difference.compareTo(new BigDecimal("0.01")) > 0) {
+                log.warn("Provided monthly credit average {} differs from calculated {} for month {}",
+                        dto.getMonthlyCreditAverage(), calculatedAvg, dto.getMonth());
+                // Don't throw exception, just warn - the @PrePersist will correct it
+            }
+        }
+
+        // If utilization percentage is provided, validate range
+        if (dto.getUtilizationPercentage() != null) {
+            if (dto.getUtilizationPercentage().compareTo(BigDecimal.ZERO) < 0 ||
+                    dto.getUtilizationPercentage().compareTo(new BigDecimal("100")) > 0) {
+                throw new BadRequestException(
+                        "Utilization percentage must be between 0 and 100 for month: " + dto.getMonth());
+            }
+        }
+    }
+
+    /**
+     * Check for duplicate months within the same request
+     */
+    private void checkForDuplicateStatementMonths(List<AccountStatementHeaderDTO.AccountStatementDTO> statementRecords) {
+        Set<YearMonth> months = new HashSet<>();
+        for (AccountStatementHeaderDTO.AccountStatementDTO dto : statementRecords) {
+            if (!months.add(dto.getMonth())) {
+                throw new BadRequestException("Duplicate month " + dto.getMonth() + " found in request");
+            }
+        }
+    }
     @Override
     public AccountStatementHeaderDTO updateHeader(Long id, AccountStatementHeaderDTO headerDTO) {
         log.info("Updating account statement header with ID: {}", id);

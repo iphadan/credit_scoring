@@ -34,7 +34,9 @@ public class OdTurnoverHeaderServiceImpl implements OdTurnoverHeaderService {
     private final OdTurnoverHeaderRepository headerRepository;
     private final OdTurnoverRepository turnoverRepository;
 
+
     @Override
+    @Transactional
     public OdTurnoverHeaderDTO createHeader(OdTurnoverHeaderDTO headerDTO) {
         log.info("Creating new OD turnover header for account holder: {}", headerDTO.getAccountHolder());
 
@@ -43,7 +45,7 @@ public class OdTurnoverHeaderServiceImpl implements OdTurnoverHeaderService {
 
         // Generate caseId if not provided
         if (headerDTO.getCaseId() == null || headerDTO.getCaseId().trim().isEmpty()) {
-            headerDTO.setCaseId(generateCaseId(headerDTO));
+            throw new ResourceNotFoundException("Case ID Must be provided");
         }
 
         // Check for duplicate caseId
@@ -63,16 +65,82 @@ public class OdTurnoverHeaderServiceImpl implements OdTurnoverHeaderService {
             headerDTO.setStatus("ACTIVE");
         }
 
-        // Convert DTO to Entity
+        // Convert DTO to Entity (header only)
         OdTurnoverHeader header = mapToEntity(headerDTO);
 
-        // Save header
+        // ===== IMPORTANT: Handle OD Turnover Records =====
+        if (headerDTO.getTurnoverRecords() != null && !headerDTO.getTurnoverRecords().isEmpty()) {
+            log.info("Processing {} OD turnover records", headerDTO.getTurnoverRecords().size());
+
+            // Validate all turnover records first
+            validateTurnoverRecords(headerDTO.getTurnoverRecords());
+
+            // Check for duplicate months within the request
+            checkForDuplicateMonths(headerDTO.getTurnoverRecords());
+
+            // Create and add each turnover record to the header
+            for (OdTurnoverHeaderDTO.OdTurnoverDTO turnoverDTO : headerDTO.getTurnoverRecords()) {
+
+                // Create turnover entity
+                OdTurnover turnover = new OdTurnover();
+                turnover.setMonth(turnoverDTO.getMonth());
+                turnover.setTotalTurnoverCredit(turnoverDTO.getTotalTurnoverCredit() != null ?
+                        turnoverDTO.getTotalTurnoverCredit() : BigDecimal.ZERO);
+                turnover.setTotalTurnoverDebit(turnoverDTO.getTotalTurnoverDebit() != null ?
+                        turnoverDTO.getTotalTurnoverDebit() : BigDecimal.ZERO);
+                turnover.setNumberOfCreditEntries(turnoverDTO.getNumberOfCreditEntries() != null ?
+                        turnoverDTO.getNumberOfCreditEntries() : 0);
+
+                // Monthly credit average and utilization percentage will be calculated
+                // automatically by the @PrePersist and @PreUpdate methods in OdTurnover entity
+
+                // Use the helper method to establish bidirectional relationship
+                header.addTurnoverRecord(turnover);
+
+                log.debug("Added OD turnover record for month: {}", turnoverDTO.getMonth());
+            }
+        }
+
+        // Save header - THIS WILL ALSO SAVE ALL TURNOVER RECORDS due to CascadeType.ALL
         OdTurnoverHeader savedHeader = headerRepository.save(header);
-        log.info("OD header created successfully with ID: {}, CaseId: {}", savedHeader.getId(), savedHeader.getCaseId());
+        log.info("OD header created successfully with ID: {}, CaseId: {}, with {} turnover records",
+                savedHeader.getId(), savedHeader.getCaseId(),
+                savedHeader.getTurnoverRecords() != null ? savedHeader.getTurnoverRecords().size() : 0);
 
         return mapToDTO(savedHeader);
     }
 
+    /**
+     * Validate all turnover records
+     */
+    private void validateTurnoverRecords(List<OdTurnoverHeaderDTO.OdTurnoverDTO> turnoverRecords) {
+        for (OdTurnoverHeaderDTO.OdTurnoverDTO dto : turnoverRecords) {
+            if (dto.getMonth() == null) {
+                throw new BadRequestException("Month is required for each turnover record");
+            }
+            if (dto.getTotalTurnoverCredit() != null && dto.getTotalTurnoverCredit().compareTo(BigDecimal.ZERO) < 0) {
+                throw new BadRequestException("Total turnover credit cannot be negative for month: " + dto.getMonth());
+            }
+            if (dto.getTotalTurnoverDebit() != null && dto.getTotalTurnoverDebit().compareTo(BigDecimal.ZERO) < 0) {
+                throw new BadRequestException("Total turnover debit cannot be negative for month: " + dto.getMonth());
+            }
+            if (dto.getNumberOfCreditEntries() != null && dto.getNumberOfCreditEntries() < 0) {
+                throw new BadRequestException("Number of credit entries cannot be negative for month: " + dto.getMonth());
+            }
+        }
+    }
+
+    /**
+     * Check for duplicate months within the same request
+     */
+    private void checkForDuplicateMonths(List<OdTurnoverHeaderDTO.OdTurnoverDTO> turnoverRecords) {
+        Set<YearMonth> months = new HashSet<>();
+        for (OdTurnoverHeaderDTO.OdTurnoverDTO dto : turnoverRecords) {
+            if (!months.add(dto.getMonth())) {
+                throw new BadRequestException("Duplicate month " + dto.getMonth() + " found in request");
+            }
+        }
+    }
     @Override
     public OdTurnoverHeaderDTO updateHeader(Long id, OdTurnoverHeaderDTO headerDTO) {
         log.info("Updating OD turnover header with ID: {}", id);
