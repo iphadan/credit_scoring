@@ -518,8 +518,9 @@ public class PreShipmentTurnoverHeaderServiceImpl implements PreShipmentTurnover
         String datePart = today.format(DateTimeFormatter.ofPattern("yyMMdd"));
 
         // Add header ID at the end for extra uniqueness (optional)
-        return String.format("cbocrs%d/%s", milliseconds, datePart);
+        return String.format("cbocrs%d-%s", milliseconds, datePart);
     }
+
 
     private BigDecimal calculateUtilizationPercentage(BigDecimal netTurnover, BigDecimal approvedAmount) {
         if (approvedAmount == null || approvedAmount.compareTo(BigDecimal.ZERO) == 0) {
