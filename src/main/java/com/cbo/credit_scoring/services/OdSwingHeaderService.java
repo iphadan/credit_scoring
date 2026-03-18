@@ -13,7 +13,9 @@ import java.util.List;
 import java.util.Map;
 
 public interface OdSwingHeaderService {
-
+    List<OdSwingHeaderDTO> getHeadersByCaseId(String caseId);
+    void deleteByCaseId(String caseId);
+    List<String> getAllCaseIds();
     // Header CRUD operations
     OdSwingHeaderDTO createHeader(OdSwingHeaderDTO headerDTO);
     OdSwingHeaderDTO updateHeader(Long id, OdSwingHeaderDTO headerDTO);

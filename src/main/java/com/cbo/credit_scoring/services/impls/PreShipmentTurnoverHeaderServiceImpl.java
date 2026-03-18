@@ -34,6 +34,36 @@ public class PreShipmentTurnoverHeaderServiceImpl implements PreShipmentTurnover
     private final PreShipmentTurnoverHeaderRepository headerRepository;
     private final PreShipmentTurnoverRepository turnoverRepository;
 
+    // In PreShipmentTurnoverHeaderServiceImpl.java
+
+    @Override
+    public List<PreShipmentTurnoverHeaderDTO> getHeadersByCaseId(String caseId) {
+        log.info("Fetching pre-shipment headers for caseId: {}", caseId);
+
+        Optional<PreShipmentTurnoverHeader> headers = headerRepository.findByCaseId(caseId);
+
+        return headers.stream()
+                .map(this::mapToDTO)
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public void deleteByCaseId(String caseId) {
+//        log.info("Deleting all pre-shipment data for caseId: {}", caseId);
+//
+//        Optional<PreShipmentTurnoverHeader> headers = headerRepository.findByCaseId(caseId);
+//        headerRepository.deleteAll(headers);
+//
+//        log.info("Deleted {} pre-shipment records for caseId: {}", headers.size(), caseId);
+    }
+
+    @Override
+    public List<String> getAllCaseIds() {
+        log.info("Fetching all unique caseIds from pre-shipment module");
+
+        return headerRepository.findAllCaseIds();
+    }
+
     @Override
     @Transactional
     public PreShipmentTurnoverHeaderDTO createHeader(PreShipmentTurnoverHeaderDTO headerDTO) {

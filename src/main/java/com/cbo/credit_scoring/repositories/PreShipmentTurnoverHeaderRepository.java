@@ -20,7 +20,22 @@ public interface PreShipmentTurnoverHeaderRepository extends JpaRepository<PreSh
     List<PreShipmentTurnoverHeader> findByCustomerNameContainingIgnoreCase(String customerName);
 
     Optional<PreShipmentTurnoverHeader> findByAccountNumber(String accountNumber);
+// Add these methods to existing PreShipmentTurnoverHeaderRepository.java
 
+    /**
+     * Find all headers by caseId (for cases with multiple versions)
+     */
+    List<PreShipmentTurnoverHeader> findAllByCaseId(String caseId);
+
+    /**
+     * Get all unique caseIds from the table
+     */
+    @Query("SELECT DISTINCT h.caseId FROM PreShipmentTurnoverHeader h WHERE h.caseId IS NOT NULL")
+    List<String> findAllCaseIds();
+
+    /**
+     * Check if any records exist for a caseId
+     */
     List<PreShipmentTurnoverHeader> findByTypeOfFacility(String typeOfFacility);
 
     List<PreShipmentTurnoverHeader> findByIndustryType(String industryType);

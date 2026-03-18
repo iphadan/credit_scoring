@@ -13,6 +13,22 @@ import java.util.Optional;
 
 @Repository
 public interface OdSwingHeaderRepository extends JpaRepository<OdSwingHeader, Long> {
+    // Add these methods to existing OdSwingHeaderRepository.java
+
+    /**
+     * Find all headers by caseId (for cases with multiple versions)
+     */
+    List<OdSwingHeader> findAllByCaseId(String caseId);
+
+    /**
+     * Get all unique caseIds from the table
+     */
+    @Query("SELECT DISTINCT h.caseId FROM OdSwingHeader h WHERE h.caseId IS NOT NULL")
+    List<String> findAllCaseIds();
+
+    /**
+     * Check if any records exist for a caseId
+     */
 
     // Find by caseId
     Optional<OdSwingHeader> findByCaseId(String caseId);

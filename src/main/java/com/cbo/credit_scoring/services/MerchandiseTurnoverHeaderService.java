@@ -11,6 +11,9 @@ import java.time.LocalDate;
 import java.util.List;
 
 public interface MerchandiseTurnoverHeaderService {
+    List<MerchandiseTurnoverHeaderDTO> getHeadersByCaseId(String caseId);
+    void deleteByCaseId(String caseId);
+    List<String> getAllCaseIds();
     // Header CRUD operations
     MerchandiseTurnoverHeaderDTO createHeader(MerchandiseTurnoverHeaderDTO headerDTO);
     MerchandiseTurnoverHeaderDTO updateHeader(Long id, MerchandiseTurnoverHeaderDTO headerDTO);

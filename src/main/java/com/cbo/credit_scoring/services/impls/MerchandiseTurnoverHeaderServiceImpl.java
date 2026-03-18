@@ -39,6 +39,39 @@ public class MerchandiseTurnoverHeaderServiceImpl implements MerchandiseTurnover
     private final MerchandiseTurnoverRepository turnoverRepository;
     private final CaseRepository caseRepository;
 
+
+    // Add these methods to existing MerchandiseTurnoverHeaderServiceImpl.java
+
+    @Override
+    public List<MerchandiseTurnoverHeaderDTO> getHeadersByCaseId(String caseId) {
+        log.info("Fetching all merchandise turnover headers for caseId: {}", caseId);
+
+        List<MerchandiseTurnoverHeader> headers = headerRepository.findAllByCaseId(caseId);
+
+        return headers.stream()
+                .map(this::mapToDTO)
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public void deleteByCaseId(String caseId) {
+        log.info("Deleting all merchandise turnover data for caseId: {}", caseId);
+
+        List<MerchandiseTurnoverHeader> headers = headerRepository.findAllByCaseId(caseId);
+        if (!headers.isEmpty()) {
+            headerRepository.deleteAll(headers);
+            log.info("Deleted {} merchandise turnover records for caseId: {}", headers.size(), caseId);
+        } else {
+            log.debug("No merchandise turnover data found for caseId: {}", caseId);
+        }
+    }
+
+    @Override
+    public List<String> getAllCaseIds() {
+        log.info("Fetching all unique caseIds from merchandise turnover module");
+
+        return headerRepository.findAllCaseIds();
+    }
     @Override
     @Transactional
     public MerchandiseTurnoverHeaderDTO createHeader(MerchandiseTurnoverHeaderDTO headerDTO) {

@@ -14,6 +14,24 @@ import java.util.Optional;
 @Repository
 public interface CreditInformationRepository extends JpaRepository<CreditInformation, Long> {
 
+    // Add these methods to existing CreditInformationRepository.java
+
+    /**
+     * Find all credit information by caseId (already exists as findByCaseIdOrderByBankTypeAscSrNoAsc)
+     * But add this simpler version if needed
+     */
+    List<CreditInformation> findAllByCaseId(String caseId);
+
+    /**
+     * Get all unique caseIds from the table
+     */
+    @Query("SELECT DISTINCT c.caseId FROM CreditInformation c WHERE c.caseId IS NOT NULL")
+    List<String> findAllCaseIds();
+
+    /**
+     * Check if any records exist for a caseId
+     */
+
     // Find by caseId
     List<CreditInformation> findByCaseId(String caseId);
 

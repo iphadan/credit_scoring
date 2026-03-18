@@ -13,6 +13,8 @@ import java.util.Map;
 
 public interface FinancialStatementService {
 
+    void deleteByCaseId(String caseId);
+    List<String> getAllCaseIds();
     // ============= Basic CRUD Operations =============
 
     /**

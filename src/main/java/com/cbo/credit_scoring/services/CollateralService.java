@@ -83,4 +83,7 @@ public interface CollateralService {
      * Calculate net value (value * discount rate)
      */
     BigDecimal calculateNetValue(BigDecimal value, BigDecimal discountRate);
+
+
+    List<String> getAllCaseIds();
 }

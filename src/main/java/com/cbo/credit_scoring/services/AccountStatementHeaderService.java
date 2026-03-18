@@ -13,7 +13,9 @@ import java.util.List;
 import java.util.Map;
 
 public interface AccountStatementHeaderService {
-
+    List<AccountStatementHeaderDTO> getHeadersByCaseId(String caseId);
+    void deleteByCaseId(String caseId);
+    List<String> getAllCaseIds();
     // Header CRUD operations
     AccountStatementHeaderDTO createHeader(AccountStatementHeaderDTO headerDTO);
     AccountStatementHeaderDTO updateHeader(Long id, AccountStatementHeaderDTO headerDTO);

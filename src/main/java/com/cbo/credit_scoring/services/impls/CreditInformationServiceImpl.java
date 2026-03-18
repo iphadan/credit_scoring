@@ -29,7 +29,17 @@ import java.util.stream.Collectors;
 public class CreditInformationServiceImpl implements CreditInformationService {
 
     private final CreditInformationRepository repository;
+// Add these methods to existing CreditInformationServiceImpl.java
 
+
+
+
+    @Override
+    public List<String> getAllCaseIds() {
+        log.info("Fetching all unique caseIds from credit information module");
+
+        return repository.findAllCaseIds();
+    }
     @Override
     public List<CreditInformationResponseDTO> createCreditInformation(CreditInformationRequestDTO requestDTO) {
         log.info("Creating credit information for case: {}, bank type: {}",

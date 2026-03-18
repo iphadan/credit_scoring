@@ -20,6 +20,10 @@ public interface OdTurnoverHeaderService {
     OdTurnoverHeaderDTO getHeaderById(Long id);
     OdTurnoverHeaderDTO getHeaderByCaseId(String caseId);
     Page<OdTurnoverHeaderDTO> getAllHeaders(Pageable pageable);
+    List<OdTurnoverHeaderDTO> getHeadersByCaseId(String caseId);
+    void deleteByCaseId(String caseId);
+    List<String> getAllCaseIds();
+
     void deleteHeader(Long id);
 
     // Search operations

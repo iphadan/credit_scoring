@@ -33,6 +33,53 @@ public class OdSwingHeaderServiceImpl implements OdSwingHeaderService {
 
     private final OdSwingHeaderRepository headerRepository;
     private final OdSwingRepository swingRepository;
+
+
+
+
+
+
+
+
+
+
+
+
+
+// Add these methods to existing OdSwingHeaderServiceImpl.java
+
+    @Override
+    public List<OdSwingHeaderDTO> getHeadersByCaseId(String caseId) {
+        log.info("Fetching all OD swing headers for caseId: {}", caseId);
+
+        List<OdSwingHeader> headers = headerRepository.findAllByCaseId(caseId);
+
+        return headers.stream()
+                .map(this::mapToDTO)
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public void deleteByCaseId(String caseId) {
+        log.info("Deleting all OD swing data for caseId: {}", caseId);
+
+        List<OdSwingHeader> headers = headerRepository.findAllByCaseId(caseId);
+        if (!headers.isEmpty()) {
+            headerRepository.deleteAll(headers);
+            log.info("Deleted {} OD swing records for caseId: {}", headers.size(), caseId);
+        } else {
+            log.debug("No OD swing data found for caseId: {}", caseId);
+        }
+    }
+
+    @Override
+    public List<String> getAllCaseIds() {
+        log.info("Fetching all unique caseIds from OD swing module");
+
+        return headerRepository.findAllCaseIds();
+    }
+
+
     private static final BigDecimal DEFAULT_THRESHOLD = new BigDecimal("80");
     @Override
     @Transactional

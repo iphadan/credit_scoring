@@ -15,6 +15,7 @@ import java.time.YearMonth;
 public class AccountStatementDTO {
 
     private Long id;
+    private String caseId; // will be added upon creation and will be used to uniquely identify the record and related table rows
 
     private YearMonth month;
 

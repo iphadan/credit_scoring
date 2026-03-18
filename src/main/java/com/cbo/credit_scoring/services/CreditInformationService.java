@@ -29,7 +29,7 @@ public interface CreditInformationService {
      * Get all credit information for a case (both Coop and Other banks)
      */
     List<CreditInformationResponseDTO> getCreditInformationByCaseId(String caseId);
-
+    List<String> getAllCaseIds();
     /**
      * Get credit information for a case by bank type
      */

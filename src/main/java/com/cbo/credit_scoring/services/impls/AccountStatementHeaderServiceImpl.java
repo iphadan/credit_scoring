@@ -34,7 +34,38 @@ public class AccountStatementHeaderServiceImpl implements AccountStatementHeader
     private final AccountStatementHeaderRepository headerRepository;
     private final AccountStatementRepository statementRepository;
     private static final BigDecimal DEFAULT_THRESHOLD = new BigDecimal("80");
+// Add these methods to existing AccountStatementHeaderServiceImpl.java
 
+    @Override
+    public List<AccountStatementHeaderDTO> getHeadersByCaseId(String caseId) {
+        log.info("Fetching all account statement headers for caseId: {}", caseId);
+
+        List<AccountStatementHeader> headers = headerRepository.findAllByCaseId(caseId);
+
+        return headers.stream()
+                .map(this::mapToDTO)
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public void deleteByCaseId(String caseId) {
+        log.info("Deleting all account statement data for caseId: {}", caseId);
+
+//        List<AccountStatementHeader> headers = headerRepository.findAllByCaseId(caseId);
+//        if (!headers.isEmpty()) {
+//            headerRepository.deleteAll(headers);
+//            log.info("Deleted {} account statement records for caseId: {}", headers.size(), caseId);
+//        } else {
+//            log.debug("No account statement data found for caseId: {}", caseId);
+//        }
+    }
+
+    @Override
+    public List<String> getAllCaseIds() {
+        log.info("Fetching all unique caseIds from account statement module");
+
+        return headerRepository.findAllCaseIds();
+    }
     @Override
     @Transactional
     public AccountStatementHeaderDTO createHeader(AccountStatementHeaderDTO headerDTO) {

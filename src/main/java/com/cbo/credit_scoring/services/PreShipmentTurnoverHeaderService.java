@@ -20,7 +20,9 @@ public interface PreShipmentTurnoverHeaderService {
     PreShipmentTurnoverHeaderDTO getHeaderByCaseId(String caseId);
     Page<PreShipmentTurnoverHeaderDTO> getAllHeaders(Pageable pageable);
     void deleteHeader(Long id);
-
+    List<PreShipmentTurnoverHeaderDTO> getHeadersByCaseId(String caseId);
+    void deleteByCaseId(String caseId);
+    List<String> getAllCaseIds();
     // Search operations
     List<PreShipmentTurnoverHeaderDTO> searchByCustomerName(String customerName);
     PreShipmentTurnoverHeaderDTO getHeaderByAccountNumber(String accountNumber);

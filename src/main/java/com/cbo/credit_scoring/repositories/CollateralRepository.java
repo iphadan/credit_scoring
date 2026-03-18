@@ -24,7 +24,23 @@ public interface CollateralRepository extends JpaRepository<Collateral, Long> {
     void deleteByCaseId(String caseId);
 
     // ============= Aggregation Queries =============
+// Add these methods to existing CollateralRepository.java
 
+    /**
+     * Find all collateral by caseId (already exists as findByCaseIdOrderBySrNoAsc)
+     * But add this simpler version if needed
+     */
+    List<Collateral> findAllByCaseId(String caseId);
+
+    /**
+     * Get all unique caseIds from the table
+     */
+    @Query("SELECT DISTINCT c.caseId FROM Collateral c WHERE c.caseId IS NOT NULL")
+    List<String> findAllCaseIds();
+
+    /**
+     * Check if any records exist for a caseId
+     */
     @Query("SELECT COALESCE(SUM(c.value), 0) FROM Collateral c WHERE c.caseId = :caseId")
     BigDecimal sumValueByCaseId(@Param("caseId") String caseId);
 

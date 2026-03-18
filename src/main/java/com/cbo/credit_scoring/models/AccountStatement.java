@@ -24,6 +24,7 @@ public class AccountStatement {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "id")
     private Long id;
+    private String caseId; // will be added upon creation and will be used to uniquely identify the record and related table rows
 
     @Column(name = "statement_month")
     private YearMonth month;

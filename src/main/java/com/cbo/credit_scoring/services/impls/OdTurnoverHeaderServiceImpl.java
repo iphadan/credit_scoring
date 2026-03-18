@@ -35,6 +35,45 @@ public class OdTurnoverHeaderServiceImpl implements OdTurnoverHeaderService {
     private final OdTurnoverRepository turnoverRepository;
 
 
+
+// Add these methods to existing OdTurnoverHeaderServiceImpl.java
+
+    @Override
+    public List<OdTurnoverHeaderDTO> getHeadersByCaseId(String caseId) {
+        log.info("Fetching all OD turnover headers for caseId: {}", caseId);
+
+        List<OdTurnoverHeader> headers = headerRepository.findAllByCaseId(caseId);
+
+        return headers.stream()
+                .map(this::mapToDTO)
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public void deleteByCaseId(String caseId) {
+        log.info("Deleting all OD turnover data for caseId: {}", caseId);
+
+        List<OdTurnoverHeader> headers = headerRepository.findAllByCaseId(caseId);
+        if (!headers.isEmpty()) {
+            headerRepository.deleteAll(headers);
+            log.info("Deleted {} OD turnover records for caseId: {}", headers.size(), caseId);
+        } else {
+            log.debug("No OD turnover data found for caseId: {}", caseId);
+        }
+    }
+
+    @Override
+    public List<String> getAllCaseIds() {
+        log.info("Fetching all unique caseIds from OD turnover module");
+
+        return headerRepository.findAllCaseIds();
+    }
+
+
+
+
+
+
     @Override
     @Transactional
     public OdTurnoverHeaderDTO createHeader(OdTurnoverHeaderDTO headerDTO) {

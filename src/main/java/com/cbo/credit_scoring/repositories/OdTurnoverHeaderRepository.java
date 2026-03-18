@@ -16,6 +16,22 @@ public interface OdTurnoverHeaderRepository extends JpaRepository<OdTurnoverHead
 
     // Find by caseId
     Optional<OdTurnoverHeader> findByCaseId(String caseId);
+// Add these methods to existing OdTurnoverHeaderRepository.java
+
+    /**
+     * Find all headers by caseId (for cases with multiple versions)
+     */
+    List<OdTurnoverHeader> findAllByCaseId(String caseId);
+
+    /**
+     * Get all unique caseIds from the table
+     */
+    @Query("SELECT DISTINCT h.caseId FROM OdTurnoverHeader h WHERE h.caseId IS NOT NULL")
+    List<String> findAllCaseIds();
+
+    /**
+     * Check if any records exist for a caseId
+     */
 
     // Find by account number
     Optional<OdTurnoverHeader> findByAccountNumber(String accountNumber);

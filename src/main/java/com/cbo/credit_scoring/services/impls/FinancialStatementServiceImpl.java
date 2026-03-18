@@ -39,7 +39,46 @@ public class FinancialStatementServiceImpl implements FinancialStatementService 
 
     private static final BigDecimal THIRTY_FIVE_PERCENT = new BigDecimal("35");
     private static final BigDecimal ONE_HUNDRED = new BigDecimal("100");
+// Add these methods to existing FinancialStatementServiceImpl.java
 
+    @Override
+    public List<FinancialStatementResponseDTO> getFinancialStatementsByCaseId(String caseId) {
+        log.info("Fetching all financial statements for caseId: {}", caseId);
+
+        List<FinancialStatement> statements = financialStatementRepository.findAllByCaseId(caseId);
+
+        List<FinancialStatementResponseDTO> responses = new ArrayList<>();
+        for (FinancialStatement statement : statements) {
+            List<BalanceSheet> balanceSheets = balanceSheetRepository
+                    .findByFinancialStatementIdOrderByPeriodOrder(statement.getId());
+            List<IncomeStatement> incomeStatements = incomeStatementRepository
+                    .findByFinancialStatementIdOrderByPeriodOrder(statement.getId());
+
+            responses.add(buildResponse(statement, balanceSheets, incomeStatements));
+        }
+
+        return responses;
+    }
+
+    @Override
+    public void deleteByCaseId(String caseId) {
+        log.info("Deleting all financial statement data for caseId: {}", caseId);
+
+        List<FinancialStatement> statements = financialStatementRepository.findAllByCaseId(caseId);
+        if (!statements.isEmpty()) {
+            financialStatementRepository.deleteAll(statements);
+            log.info("Deleted {} financial statement records for caseId: {}", statements.size(), caseId);
+        } else {
+            log.debug("No financial statement data found for caseId: {}", caseId);
+        }
+    }
+
+    @Override
+    public List<String> getAllCaseIds() {
+        log.info("Fetching all unique caseIds from financial statement module");
+
+        return financialStatementRepository.findAllCaseIds();
+    }
     @Override
     public FinancialStatementResponseDTO createFinancialStatement(FinancialStatementRequestDTO requestDTO) {
         log.info("Creating financial statement for case: {}", requestDTO.getCaseId());
@@ -151,25 +190,6 @@ public class FinancialStatementServiceImpl implements FinancialStatementService 
         log.info("Financial statement deleted successfully with ID: {}", id);
     }
 
-    @Override
-    public List<FinancialStatementResponseDTO> getFinancialStatementsByCaseId(String caseId) {
-        log.info("Fetching financial statements for case: {}", caseId);
-
-        Case case_ = caseRepository.findByCaseId(caseId)
-                .orElseThrow(() -> new ResourceNotFoundException("Case not found with ID: " + caseId));
-
-        List<FinancialStatement> statements = financialStatementRepository.findByCaseId_IdOrderByVersionDesc(case_.getId());
-
-        return statements.stream()
-                .map(statement -> {
-                    List<BalanceSheet> balanceSheets = balanceSheetRepository
-                            .findByFinancialStatementIdOrderByPeriodOrder(statement.getId());
-                    List<IncomeStatement> incomeStatements = incomeStatementRepository
-                            .findByFinancialStatementIdOrderByPeriodOrder(statement.getId());
-                    return buildResponse(statement, balanceSheets, incomeStatements);
-                })
-                .collect(Collectors.toList());
-    }
 
     @Override
     public FinancialStatementResponseDTO getLatestFinancialStatementByCaseId(String caseId) {

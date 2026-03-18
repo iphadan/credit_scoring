@@ -78,4 +78,12 @@ public class SwaggerGroupConfig {
                 .packagesToScan("com.cbo.credit_scoring.controllers")
                 .build();
     }
+    @Bean
+    public GroupedOpenApi createCommonApi () {
+        return GroupedOpenApi.builder()
+                .group("common")
+                .pathsToMatch("/api/v1/common/**")
+                .packagesToScan("com.cbo.credit_scoring.controllers")
+                .build();
+    }
 }

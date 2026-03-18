@@ -16,6 +16,24 @@ import java.util.Optional;
 @Repository
 public interface AccountStatementRepository extends JpaRepository<AccountStatement, Long> {
 
+
+    // Add these methods to existing AccountStatementHeaderRepository.java
+
+    /**
+     * Find all headers by caseId (for cases with multiple versions)
+     */
+    List<AccountStatementHeader> findAllByCaseId(String caseId);
+
+    /**
+     * Get all unique caseIds from the table
+     */
+    @Query("SELECT DISTINCT h.caseId FROM AccountStatementHeader h WHERE h.caseId IS NOT NULL")
+    List<String> findAllCaseIds();
+
+    /**
+     * Check if any records exist for a caseId
+     */
+    boolean existsByCaseId(String caseId);
     // Find by header
     List<AccountStatement> findByHeader(AccountStatementHeader header);
 

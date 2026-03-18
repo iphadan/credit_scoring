@@ -43,7 +43,17 @@ public class CollateralServiceImpl implements CollateralService {
     private static final BigDecimal PERCENT_40 = new BigDecimal("40");
     private static final BigDecimal PERCENT_25 = new BigDecimal("25");
     private static final BigDecimal PERCENT_0 = BigDecimal.ZERO;
+// Add these methods to existing CollateralServiceImpl.java
 
+
+
+
+    @Override
+    public List<String> getAllCaseIds() {
+        log.info("Fetching all unique caseIds from collateral module");
+
+        return repository.findAllCaseIds();
+    }
     @Override
     public CollateralResponseDTO createCollateral(CollateralRequestDTO requestDTO) {
         log.info("Creating collateral for case: {}", requestDTO.getCaseId());

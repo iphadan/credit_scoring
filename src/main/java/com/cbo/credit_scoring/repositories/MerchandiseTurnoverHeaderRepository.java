@@ -13,6 +13,22 @@ import java.util.Optional;
 @Repository
 public interface MerchandiseTurnoverHeaderRepository extends JpaRepository<MerchandiseTurnoverHeader, Long> {
 
+    // Add these methods to existing MerchandiseTurnoverHeaderRepository.java
+
+    /**
+     * Find all headers by caseId (for cases with multiple versions)
+     */
+    List<MerchandiseTurnoverHeader> findAllByCaseId(String caseId);
+
+    /**
+     * Get all unique caseIds from the table
+     */
+    @Query("SELECT DISTINCT h.caseId FROM MerchandiseTurnoverHeader h WHERE h.caseId IS NOT NULL")
+    List<String> findAllCaseIds();
+
+    /**
+     * Check if any records exist for a caseId
+     */
     boolean existsByCaseId(String caseId);
 
 

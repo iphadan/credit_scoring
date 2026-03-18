@@ -14,6 +14,25 @@ import java.util.Optional;
 public interface FinancialStatementRepository extends JpaRepository<FinancialStatement, Long> {
 
     // Find by case ID (the database ID, not the caseId string)
+
+
+    // Add these methods to existing FinancialStatementRepository.java
+
+    /**
+     * Find all financial statements by caseId
+     */
+    List<FinancialStatement> findAllByCaseId(String caseId);
+
+    /**
+     * Get all unique caseIds from the table
+     */
+    @Query("SELECT DISTINCT fs.caseId FROM FinancialStatement fs WHERE fs.caseId IS NOT NULL")
+    List<String> findAllCaseIds();
+
+    /**
+     * Check if any records exist for a caseId
+     */
+    boolean existsByCaseId(String caseId);
     List<FinancialStatement> findByCaseId_Id(Long caseDatabaseId);
 
     // Find by case ID ordered by version descending
